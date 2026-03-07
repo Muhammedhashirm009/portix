@@ -122,12 +122,37 @@ type DNSRecord struct {
 	Proxied bool   `json:"proxied"`
 }
 
-// CreateDNSRecord creates a CNAME record pointing to the tunnel
+// CreateDNSRecord creates or updates a CNAME record pointing to the tunnel
 func (c *CloudflareClient) CreateDNSRecord(subdomain, tunnelID string) (*DNSRecord, error) {
+	tunnelTarget := fmt.Sprintf("%s.cfargotunnel.com", tunnelID)
+
+	// First check if a CNAME record already exists for this subdomain
+	existing, err := c.GetDNSRecordByName(subdomain)
+	if err == nil && existing != nil {
+		// Record exists — update it to point to the correct tunnel
+		update := DNSRecord{
+			Type:    "CNAME",
+			Name:    subdomain,
+			Content: tunnelTarget,
+			TTL:     1,
+			Proxied: true,
+		}
+		resp, err := c.doRequest("PUT", fmt.Sprintf("/zones/%s/dns_records/%s", c.zoneID, existing.ID), update)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update existing DNS record: %w", err)
+		}
+		var updated DNSRecord
+		if err := json.Unmarshal(resp.Result, &updated); err != nil {
+			return nil, err
+		}
+		return &updated, nil
+	}
+
+	// No existing record — create new one
 	record := DNSRecord{
 		Type:    "CNAME",
 		Name:    subdomain,
-		Content: fmt.Sprintf("%s.cfargotunnel.com", tunnelID),
+		Content: tunnelTarget,
 		TTL:     1, // Auto
 		Proxied: true,
 	}

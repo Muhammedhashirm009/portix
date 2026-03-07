@@ -239,24 +239,33 @@ type IngressRuleInfo struct {
 func (m *Manager) regenerateConfig() error {
 	rules, err := m.getIngressRulesInternal()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get ingress rules: %w", err)
 	}
 
+	if m.tunnelID == "" {
+		return fmt.Errorf("apps tunnel ID is empty — cannot generate config")
+	}
+
+	credsFile := filepath.Join(m.configDir, "tunnel-apps-creds.json")
 	config := TunnelConfig{
 		Tunnel:          m.tunnelID,
-		CredentialsFile: filepath.Join(m.configDir, "tunnel-apps-creds.json"),
+		CredentialsFile: credsFile,
 		Ingress:         []IngressRule{},
 	}
 
-	// Add all app rules
+	// Add all enabled app rules
+	enabledCount := 0
 	for _, r := range rules {
 		if !r.Enabled {
+			log.Printf("[tunnel]     skip disabled rule: %s → %s", r.Domain, r.Target)
 			continue
 		}
 		config.Ingress = append(config.Ingress, IngressRule{
 			Hostname: r.Domain,
 			Service:  r.Target,
 		})
+		log.Printf("[tunnel]     ingress: %s → %s", r.Domain, r.Target)
+		enabledCount++
 	}
 
 	// Catch-all rule (required by cloudflared)
@@ -270,12 +279,16 @@ func (m *Manager) regenerateConfig() error {
 		return fmt.Errorf("failed to marshal tunnel config: %w", err)
 	}
 
+	// Ensure Unix line endings
+	yamlStr := strings.ReplaceAll(string(data), "\r\n", "\n")
+	yamlStr = strings.ReplaceAll(yamlStr, "\r", "\n")
+
 	configPath := filepath.Join(m.configDir, "tunnel-apps.yml")
-	if err := os.WriteFile(configPath, data, 0600); err != nil {
+	if err := os.WriteFile(configPath, []byte(yamlStr), 0600); err != nil {
 		return fmt.Errorf("failed to write tunnel config: %w", err)
 	}
 
-	log.Printf("[tunnel] Regenerated config with %d ingress rules", len(rules))
+	log.Printf("[tunnel] Regenerated %s: tunnel=%s, %d ingress rules, creds=%s", configPath, m.tunnelID, enabledCount, credsFile)
 	return nil
 }
 
