@@ -58,9 +58,10 @@
                 <div class="card" style="margin-bottom:24px;">
                     <div class="card-header">
                         <h3>☁️ Cloudflare Configuration</h3>
-                        <button class="btn btn-ghost btn-sm" onclick="toggleCFConfig()">Edit</button>
+                        <button class="btn btn-ghost btn-sm" id="cfEditBtn" onclick="toggleCFConfig()">Edit</button>
                     </div>
-                    <div class="card-body" id="cfConfigBody">
+                    <!-- Display View -->
+                    <div class="card-body" id="cfConfigDisplay">
                         <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:16px;">
                             <div>
                                 <div
@@ -81,6 +82,37 @@
                                     Panel Domain</div>
                                 <div id="cfPanelDomain" style="color:var(--text-accent);">--</div>
                             </div>
+                        </div>
+                    </div>
+                    <!-- Edit Form (hidden by default) -->
+                    <div class="card-body" id="cfConfigEdit" style="display:none;">
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                            <div class="form-group">
+                                <label>API Token</label>
+                                <input type="text" class="form-control" id="cfEditToken"
+                                    placeholder="Cloudflare API Token">
+                            </div>
+                            <div class="form-group">
+                                <label>Account ID</label>
+                                <input type="text" class="form-control" id="cfEditAccountId" placeholder="Account ID">
+                            </div>
+                            <div class="form-group">
+                                <label>Zone ID</label>
+                                <input type="text" class="form-control" id="cfEditZoneId" placeholder="Zone ID">
+                            </div>
+                            <div class="form-group">
+                                <label>Zone Name</label>
+                                <input type="text" class="form-control" id="cfEditZoneName" placeholder="example.com">
+                            </div>
+                            <div class="form-group">
+                                <label>Panel Domain</label>
+                                <input type="text" class="form-control" id="cfEditPanelDomain"
+                                    placeholder="panel.example.com">
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:8px; margin-top:12px;">
+                            <button class="btn btn-primary btn-sm" onclick="saveCFConfig()">Save</button>
+                            <button class="btn btn-ghost btn-sm" onclick="toggleCFConfig()">Cancel</button>
                         </div>
                     </div>
                 </div>
@@ -250,6 +282,56 @@
 
         function showAddIngressModal() {
             document.getElementById('addIngressModal').classList.add('active');
+        }
+
+        // Toggle Cloudflare config edit form
+        let cfEditing = false;
+        async function toggleCFConfig() {
+            cfEditing = !cfEditing;
+            document.getElementById('cfConfigDisplay').style.display = cfEditing ? 'none' : 'block';
+            document.getElementById('cfConfigEdit').style.display = cfEditing ? 'block' : 'none';
+            document.getElementById('cfEditBtn').textContent = cfEditing ? 'Cancel' : 'Edit';
+
+            if (cfEditing) {
+                // Pre-fill form with current values
+                const data = await API.get('/tunnels/cloudflare');
+                if (data.success && data.data) {
+                    document.getElementById('cfEditToken').value = data.data.api_token || '';
+                    document.getElementById('cfEditAccountId').value = data.data.account_id || '';
+                    document.getElementById('cfEditZoneId').value = data.data.zone_id || '';
+                    document.getElementById('cfEditZoneName').value = data.data.zone_name || '';
+                    document.getElementById('cfEditPanelDomain').value = data.data.panel_domain || '';
+                }
+            }
+        }
+
+        // Save Cloudflare config
+        async function saveCFConfig() {
+            const payload = {
+                api_token: document.getElementById('cfEditToken').value,
+                account_id: document.getElementById('cfEditAccountId').value,
+                zone_id: document.getElementById('cfEditZoneId').value,
+                zone_name: document.getElementById('cfEditZoneName').value,
+                panel_domain: document.getElementById('cfEditPanelDomain').value,
+            };
+
+            const data = await API.put('/tunnels/cloudflare', payload);
+            if (data.success) {
+                showToast('Cloudflare configuration saved', 'success');
+                cfEditing = false;
+                document.getElementById('cfConfigDisplay').style.display = 'block';
+                document.getElementById('cfConfigEdit').style.display = 'none';
+                document.getElementById('cfEditBtn').textContent = 'Edit';
+                loadCFConfig();
+            } else {
+                showToast(data.error || 'Failed to save', 'error');
+            }
+        }
+
+        // View tunnel logs
+        function viewLogs(type) {
+            showToast('Opening logs for ' + type + ' tunnel...', 'info');
+            window.open('/terminal', '_blank');
         }
 
         // Init
