@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/tunnelpanel/tunnelpanel/internal/database"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/database"
 )
 
 // PortAllocator manages port assignment for hosted apps

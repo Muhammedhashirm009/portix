@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/tunnelpanel/tunnelpanel/internal/api"
-	"github.com/tunnelpanel/tunnelpanel/internal/system"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/httputil"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/system"
 )
 
 // DashboardHandler handles dashboard endpoints
@@ -18,17 +18,17 @@ func NewDashboardHandler() *DashboardHandler {
 func (h *DashboardHandler) GetStats(c *gin.Context) {
 	stats, err := system.GetSystemStats()
 	if err != nil {
-		api.Error(c, 500, "failed to get system stats: "+err.Error())
+		httputil.Error(c, 500, "failed to get system stats: "+err.Error())
 		return
 	}
 
-	api.Success(c, stats)
+	httputil.Success(c, stats)
 }
 
 // GetServices handles GET /api/dashboard/services
 func (h *DashboardHandler) GetServices(c *gin.Context) {
 	services := system.GetAllServicesStatus()
-	api.Success(c, services)
+	httputil.Success(c, services)
 }
 
 // ControlService handles POST /api/services/:name/:action
@@ -47,14 +47,14 @@ func (h *DashboardHandler) ControlService(c *gin.Context) {
 	}
 
 	if !allowed[name] {
-		api.Error(c, 400, "service not allowed: "+name)
+		httputil.Error(c, 400, "service not allowed: "+name)
 		return
 	}
 
 	if err := system.ControlService(name, action); err != nil {
-		api.Error(c, 500, err.Error())
+		httputil.Error(c, 500, err.Error())
 		return
 	}
 
-	api.Success(c, gin.H{"message": name + " " + action + " successful"})
+	httputil.Success(c, gin.H{"message": name + " " + action + " successful"})
 }

@@ -1,29 +1,30 @@
 package api
 
 import (
-	"embed"
 	"html/template"
 	"io/fs"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tunnelpanel/tunnelpanel/internal/api/handlers"
-	"github.com/tunnelpanel/tunnelpanel/internal/config"
-	"github.com/tunnelpanel/tunnelpanel/internal/tunnel"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/api/handlers"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/config"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/tunnel"
+	"github.com/Muhammedhashirm009/tunnel-panel/web"
 )
 
 // SetupRouter configures all routes and returns the Gin engine
-func SetupRouter(cfg *config.Config, tunnelMgr *tunnel.Manager, webFS embed.FS) *gin.Engine {
+func SetupRouter(cfg *config.Config, tunnelMgr *tunnel.Manager) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
 
 	// --- Load HTML templates from embedded FS ---
-	tmpl := template.Must(template.New("").ParseFS(webFS, "web/templates/**/*.html"))
+	// web.FS paths start from "templates/" and "static/" (relative to web/ directory)
+	tmpl := template.Must(template.New("").ParseFS(web.FS, "templates/pages/*.html", "templates/partials/*.html"))
 	r.SetHTMLTemplate(tmpl)
 
 	// --- Serve static files from embedded FS ---
-	staticFS, _ := fs.Sub(webFS, "web/static")
+	staticFS, _ := fs.Sub(web.FS, "static")
 	r.StaticFS("/static", http.FS(staticFS))
 
 	// --- Setup check middleware (redirect to /setup if not configured) ---

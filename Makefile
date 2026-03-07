@@ -1,4 +1,4 @@
-.PHONY: build build-server build-cli clean install dev
+.PHONY: build build-server build-cli clean install dev deps
 
 # Variables
 BINARY_SERVER = tunnelpanel
@@ -7,8 +7,13 @@ BUILD_DIR = ./build
 VERSION = 1.0.0
 LDFLAGS = -s -w -X main.version=$(VERSION)
 
+# Resolve dependencies first
+deps:
+	@echo "📦 Resolving dependencies..."
+	go mod tidy
+
 # Build both binaries
-build: build-server build-cli
+build: deps build-server build-cli
 
 build-server:
 	@echo "🔨 Building TunnelPanel server..."
@@ -32,7 +37,7 @@ install: build
 	@echo "✅ Installed to /usr/local/bin/"
 
 # Development run
-dev:
+dev: deps
 	@echo "🚀 Starting dev server..."
 	go run ./cmd/server/
 

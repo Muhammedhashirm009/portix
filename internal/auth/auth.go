@@ -11,7 +11,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/tunnelpanel/tunnelpanel/internal/database"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/database"
 )
 
 var (

@@ -5,10 +5,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tunnelpanel/tunnelpanel/internal/api"
-	"github.com/tunnelpanel/tunnelpanel/internal/auth"
-	"github.com/tunnelpanel/tunnelpanel/internal/config"
-	"github.com/tunnelpanel/tunnelpanel/internal/database"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/auth"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/config"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/database"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/httputil"
 )
 
 // AuthHandler handles authentication endpoints
@@ -31,7 +31,7 @@ type LoginRequest struct {
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		api.Error(c, http.StatusBadRequest, "username and password are required")
+		httputil.Error(c, http.StatusBadRequest, "username and password are required")
 		return
 	}
 
@@ -42,7 +42,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			"INSERT INTO audit_log (action, details, ip_address) VALUES (?, ?, ?)",
 			"login_failed", "username: "+req.Username, c.ClientIP(),
 		)
-		api.Error(c, http.StatusUnauthorized, "invalid username or password")
+		httputil.Error(c, http.StatusUnauthorized, "invalid username or password")
 		return
 	}
 
@@ -63,7 +63,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		user.ID, "login_success", c.ClientIP(),
 	)
 
-	api.Success(c, gin.H{
+	httputil.Success(c, gin.H{
 		"user": gin.H{
 			"id":       user.ID,
 			"username": user.Username,
@@ -75,7 +75,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 // Logout handles POST /api/auth/logout
 func (h *AuthHandler) Logout(c *gin.Context) {
 	c.SetCookie("tunnelpanel_token", "", -1, "/", "", true, true)
-	api.Success(c, gin.H{"message": "logged out"})
+	httputil.Success(c, gin.H{"message": "logged out"})
 }
 
 // Me handles GET /api/auth/me — returns current user info
@@ -83,7 +83,7 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	username, _ := c.Get("username")
 
-	api.Success(c, gin.H{
+	httputil.Success(c, gin.H{
 		"id":       userID,
 		"username": username,
 	})
@@ -91,11 +91,11 @@ func (h *AuthHandler) Me(c *gin.Context) {
 
 // SetupRequest represents the first-run setup form
 type SetupRequest struct {
-	Username           string `json:"username" binding:"required"`
-	Password           string `json:"password" binding:"required"`
-	CloudflareAPIToken string `json:"cloudflare_api_token"`
+	Username            string `json:"username" binding:"required"`
+	Password            string `json:"password" binding:"required"`
+	CloudflareAPIToken  string `json:"cloudflare_api_token"`
 	CloudflareAccountID string `json:"cloudflare_account_id"`
-	PanelDomain        string `json:"panel_domain"`
+	PanelDomain         string `json:"panel_domain"`
 }
 
 // Setup handles POST /api/setup — first-time panel setup
@@ -103,27 +103,27 @@ func (h *AuthHandler) Setup(c *gin.Context) {
 	// Check if setup already done
 	count, _ := auth.UserCount()
 	if count > 0 {
-		api.Error(c, http.StatusConflict, "setup already completed")
+		httputil.Error(c, http.StatusConflict, "setup already completed")
 		return
 	}
 
 	var req SetupRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		api.Error(c, http.StatusBadRequest, "username and password are required")
+		httputil.Error(c, http.StatusBadRequest, "username and password are required")
 		return
 	}
 
 	// Create admin user
 	_, err := auth.CreateUser(req.Username, req.Password)
 	if err != nil {
-		api.Error(c, http.StatusInternalServerError, "failed to create user: "+err.Error())
+		httputil.Error(c, http.StatusInternalServerError, "failed to create user: "+err.Error())
 		return
 	}
 
 	// Generate JWT secret
 	secret, err := auth.GenerateJWTSecret()
 	if err != nil {
-		api.Error(c, http.StatusInternalServerError, "failed to generate secret")
+		httputil.Error(c, http.StatusInternalServerError, "failed to generate secret")
 		return
 	}
 
@@ -154,7 +154,7 @@ func (h *AuthHandler) Setup(c *gin.Context) {
 	token, _, _ := auth.Authenticate(req.Username, req.Password, secret, h.cfg.SessionExpiry)
 	c.SetCookie("tunnelpanel_token", token, h.cfg.SessionExpiry*3600, "/", "", true, true)
 
-	api.Success(c, gin.H{
+	httputil.Success(c, gin.H{
 		"message": "setup completed successfully",
 		"token":   token,
 	})

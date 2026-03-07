@@ -3,10 +3,11 @@ package api
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tunnelpanel/tunnelpanel/internal/auth"
-	"github.com/tunnelpanel/tunnelpanel/internal/config"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/auth"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/config"
 )
 
 // AuthMiddleware validates JWT tokens on protected routes
@@ -82,7 +83,7 @@ func SetupCheckMiddleware() gin.HandlerFunc {
 
 // RateLimitMiddleware basic rate limiting for login attempts
 func RateLimitMiddleware() gin.HandlerFunc {
-	// Simple in-memory rate limiter (upgrade to Redis for production)
+	// Simple in-memory rate limiter
 	type attempt struct {
 		count    int
 		lastTime int64
@@ -97,7 +98,7 @@ func RateLimitMiddleware() gin.HandlerFunc {
 
 		ip := c.ClientIP()
 		a, exists := attempts[ip]
-		now := unixNow()
+		now := time.Now().Unix()
 
 		if !exists {
 			attempts[ip] = &attempt{count: 1, lastTime: now}
@@ -124,8 +125,4 @@ func RateLimitMiddleware() gin.HandlerFunc {
 		a.lastTime = now
 		c.Next()
 	}
-}
-
-func unixNow() int64 {
-	return int64(0) // Will use time.Now().Unix() when imported
 }

@@ -1,4 +1,4 @@
-package api
+package httputil
 
 import (
 	"net/http"
@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// JSON response helpers
+// JSON response helpers — in a separate package to avoid import cycles
 
 // Success sends a success JSON response
 func Success(c *gin.Context, data interface{}) {

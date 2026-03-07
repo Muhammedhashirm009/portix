@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/tunnelpanel/tunnelpanel/internal/database"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/database"
 	"gopkg.in/yaml.v3"
 )
 

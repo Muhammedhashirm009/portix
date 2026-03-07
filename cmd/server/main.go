@@ -1,21 +1,17 @@
 package main
 
 import (
-	"embed"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"github.com/tunnelpanel/tunnelpanel/internal/api"
-	"github.com/tunnelpanel/tunnelpanel/internal/config"
-	"github.com/tunnelpanel/tunnelpanel/internal/database"
-	"github.com/tunnelpanel/tunnelpanel/internal/tunnel"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/api"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/config"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/database"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/tunnel"
 )
-
-//go:embed web/*
-var webFS embed.FS
 
 func main() {
 	fmt.Println("╔══════════════════════════════════════╗")
@@ -57,8 +53,8 @@ func main() {
 		log.Println("Tunnel manager initialized (Cloudflare not configured)")
 	}
 
-	// Setup router
-	router := api.SetupRouter(cfg, tunnelMgr, webFS)
+	// Setup router (web assets are embedded via web.FS inside the router)
+	router := api.SetupRouter(cfg, tunnelMgr)
 
 	// Ensure log directory exists
 	os.MkdirAll(cfg.LogDir, 0755)

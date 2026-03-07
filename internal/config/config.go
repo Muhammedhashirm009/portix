@@ -2,12 +2,11 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 )
-
-// Note: itoa() helper is in helpers.go
 
 const (
 	DefaultPort         = 8443
@@ -48,10 +47,10 @@ type Config struct {
 	SessionExpiry int `json:"session_expiry"`
 
 	// Cloudflare
-	CloudflareAPIToken string `json:"cloudflare_api_token"`
+	CloudflareAPIToken  string `json:"cloudflare_api_token"`
 	CloudflareAccountID string `json:"cloudflare_account_id"`
-	CloudflareZoneID   string `json:"cloudflare_zone_id"`
-	CloudflareZoneName string `json:"cloudflare_zone_name"`
+	CloudflareZoneID    string `json:"cloudflare_zone_id"`
+	CloudflareZoneName  string `json:"cloudflare_zone_name"`
 
 	// Tunnel IDs
 	PanelTunnelID string `json:"panel_tunnel_id"`
@@ -67,15 +66,15 @@ var (
 // DefaultConfig returns a Config with sensible defaults
 func DefaultConfig() *Config {
 	return &Config{
-		Host:            DefaultHost,
-		Port:            DefaultPort,
+		Host:              DefaultHost,
+		Port:              DefaultPort,
 		AllowDirectAccess: false,
-		DataDir:         DefaultDataDir,
-		DBPath:          DefaultDBPath,
-		LogDir:          DefaultLogDir,
-		PortRangeMin:    DefaultPortRangeMin,
-		PortRangeMax:    DefaultPortRangeMax,
-		SessionExpiry:   24,
+		DataDir:           DefaultDataDir,
+		DBPath:            DefaultDBPath,
+		LogDir:            DefaultLogDir,
+		PortRangeMin:      DefaultPortRangeMin,
+		PortRangeMax:      DefaultPortRangeMax,
+		SessionExpiry:     24,
 	}
 }
 
@@ -146,11 +145,7 @@ func (c *Config) GetListenAddr() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.AllowDirectAccess {
-		return "0.0.0.0:" + itoa(c.Port)
+		return "0.0.0.0:" + fmt.Sprintf("%d", c.Port)
 	}
-	return c.Host + ":" + itoa(c.Port)
-}
-
-func itoa(n int) string {
-	return fmt.Sprintf("%d", n)
+	return c.Host + ":" + fmt.Sprintf("%d", c.Port)
 }

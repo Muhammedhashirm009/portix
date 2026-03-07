@@ -4,10 +4,10 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tunnelpanel/tunnelpanel/internal/api"
-	"github.com/tunnelpanel/tunnelpanel/internal/config"
-	"github.com/tunnelpanel/tunnelpanel/internal/database"
-	"github.com/tunnelpanel/tunnelpanel/internal/tunnel"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/config"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/database"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/httputil"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/tunnel"
 )
 
 // TunnelHandler handles tunnel management endpoints
@@ -25,20 +25,20 @@ func NewTunnelHandler(cfg *config.Config, mgr *tunnel.Manager) *TunnelHandler {
 func (h *TunnelHandler) GetStatus(c *gin.Context) {
 	status, err := h.manager.GetTunnelStatus()
 	if err != nil {
-		api.Error(c, 500, "failed to get tunnel status: "+err.Error())
+		httputil.Error(c, 500, "failed to get tunnel status: "+err.Error())
 		return
 	}
-	api.Success(c, status)
+	httputil.Success(c, status)
 }
 
 // GetIngressRules handles GET /api/tunnels/ingress
 func (h *TunnelHandler) GetIngressRules(c *gin.Context) {
 	rules, err := h.manager.GetIngressRules()
 	if err != nil {
-		api.Error(c, 500, "failed to get ingress rules: "+err.Error())
+		httputil.Error(c, 500, "failed to get ingress rules: "+err.Error())
 		return
 	}
-	api.Success(c, rules)
+	httputil.Success(c, rules)
 }
 
 // AddIngressRuleRequest represents a new ingress rule
@@ -53,32 +53,32 @@ type AddIngressRuleRequest struct {
 func (h *TunnelHandler) AddIngressRule(c *gin.Context) {
 	var req AddIngressRuleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		api.Error(c, http.StatusBadRequest, "domain, port, and app_type are required")
+		httputil.Error(c, http.StatusBadRequest, "domain, port, and app_type are required")
 		return
 	}
 
 	if err := h.manager.AddIngressRule(req.Domain, req.Port, req.AppType, req.AppID); err != nil {
-		api.Error(c, 500, "failed to add ingress rule: "+err.Error())
+		httputil.Error(c, 500, "failed to add ingress rule: "+err.Error())
 		return
 	}
 
-	api.Created(c, gin.H{"message": "ingress rule added", "domain": req.Domain})
+	httputil.Created(c, gin.H{"message": "ingress rule added", "domain": req.Domain})
 }
 
 // RemoveIngressRule handles DELETE /api/tunnels/ingress/:domain
 func (h *TunnelHandler) RemoveIngressRule(c *gin.Context) {
 	domain := c.Param("domain")
 	if domain == "" {
-		api.Error(c, http.StatusBadRequest, "domain is required")
+		httputil.Error(c, http.StatusBadRequest, "domain is required")
 		return
 	}
 
 	if err := h.manager.RemoveIngressRule(domain); err != nil {
-		api.Error(c, 500, "failed to remove ingress rule: "+err.Error())
+		httputil.Error(c, 500, "failed to remove ingress rule: "+err.Error())
 		return
 	}
 
-	api.Success(c, gin.H{"message": "ingress rule removed", "domain": domain})
+	httputil.Success(c, gin.H{"message": "ingress rule removed", "domain": domain})
 }
 
 // CloudflareConfigRequest holds Cloudflare settings
@@ -93,14 +93,14 @@ type CloudflareConfigRequest struct {
 func (h *TunnelHandler) UpdateCloudflareConfig(c *gin.Context) {
 	var req CloudflareConfigRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		api.Error(c, http.StatusBadRequest, "api_token and account_id are required")
+		httputil.Error(c, http.StatusBadRequest, "api_token and account_id are required")
 		return
 	}
 
 	// Verify token with Cloudflare
 	client := tunnel.NewCloudflareClient(req.APIToken, req.AccountID, req.ZoneID, req.ZoneName)
 	if err := client.VerifyToken(); err != nil {
-		api.Error(c, http.StatusBadRequest, "invalid Cloudflare API token: "+err.Error())
+		httputil.Error(c, http.StatusBadRequest, "invalid Cloudflare API token: "+err.Error())
 		return
 	}
 
@@ -110,7 +110,7 @@ func (h *TunnelHandler) UpdateCloudflareConfig(c *gin.Context) {
 		req.APIToken, req.AccountID, req.ZoneID, req.ZoneName,
 	)
 	if err != nil {
-		api.Error(c, 500, "failed to save config: "+err.Error())
+		httputil.Error(c, 500, "failed to save config: "+err.Error())
 		return
 	}
 
@@ -122,7 +122,7 @@ func (h *TunnelHandler) UpdateCloudflareConfig(c *gin.Context) {
 		cfg.CloudflareZoneName = req.ZoneName
 	})
 
-	api.Success(c, gin.H{"message": "cloudflare config updated"})
+	httputil.Success(c, gin.H{"message": "cloudflare config updated"})
 }
 
 // GetCloudflareConfig handles GET /api/tunnels/cloudflare
@@ -138,7 +138,7 @@ func (h *TunnelHandler) GetCloudflareConfig(c *gin.Context) {
 		maskedToken = token[:4] + "****" + token[len(token)-4:]
 	}
 
-	api.Success(c, gin.H{
+	httputil.Success(c, gin.H{
 		"api_token":    maskedToken,
 		"account_id":   accountID,
 		"zone_id":      zoneID,
@@ -159,9 +159,9 @@ func (h *TunnelHandler) ListZones(c *gin.Context) {
 
 	zones, err := client.ListZones()
 	if err != nil {
-		api.Error(c, 500, "failed to list zones: "+err.Error())
+		httputil.Error(c, 500, "failed to list zones: "+err.Error())
 		return
 	}
 
-	api.Success(c, zones)
+	httputil.Success(c, zones)
 }
