@@ -17,7 +17,7 @@ A powerful server control panel for Ubuntu Server with built-in **Cloudflare Tun
 
 ```bash
 # Clone the repo
-git clone https://github.com/tunnelpanel/tunnelpanel.git
+git clone https://github.com/tunnel-panel/tunnelpanel.git
 cd tunnelpanel
 
 # Run installer (as root)
