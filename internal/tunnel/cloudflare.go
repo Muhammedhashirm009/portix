@@ -38,10 +38,10 @@ func NewCloudflareClient(apiToken, accountID, zoneID, zoneName string) *Cloudfla
 // --- API Request Helpers ---
 
 type cfResponse struct {
-	Success  bool            `json:"success"`
-	Errors   []cfError       `json:"errors"`
-	Messages []string        `json:"messages"`
-	Result   json.RawMessage `json:"result"`
+	Success  bool              `json:"success"`
+	Errors   []cfError         `json:"errors"`
+	Messages json.RawMessage   `json:"messages"`
+	Result   json.RawMessage   `json:"result"`
 }
 
 type cfError struct {
