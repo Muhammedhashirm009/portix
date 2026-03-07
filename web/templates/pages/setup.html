@@ -253,10 +253,14 @@
                         addLog('✓ Apps Tunnel: ' + data.data.tunnels.apps_tunnel_id, 'success');
                         addLog('✓ Panel accessible at: https://' + data.data.tunnels.panel_domain, 'success');
                     }
+                    if (data.data && data.data.tunnel_error) {
+                        addLog('⚠ Tunnel setup warning: ' + data.data.tunnel_error, 'error');
+                        addLog('Tunnels can be configured later from Settings.', '');
+                    }
                     addLog('✅ Setup complete! Redirecting...', 'success');
 
                     document.getElementById('setupBtnText').textContent = '✅ Setup Complete!';
-                    setTimeout(() => { window.location.href = '/dashboard'; }, 2000);
+                    setTimeout(() => { window.location.href = '/dashboard'; }, 2500);
                 } else {
                     errorEl.textContent = data.error || 'Setup failed';
                     errorEl.style.display = 'block';

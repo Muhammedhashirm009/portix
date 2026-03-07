@@ -83,10 +83,11 @@ func (h *TunnelHandler) RemoveIngressRule(c *gin.Context) {
 
 // CloudflareConfigRequest holds Cloudflare settings
 type CloudflareConfigRequest struct {
-	APIToken  string `json:"api_token" binding:"required"`
-	AccountID string `json:"account_id" binding:"required"`
-	ZoneID    string `json:"zone_id"`
-	ZoneName  string `json:"zone_name"`
+	APIToken    string `json:"api_token" binding:"required"`
+	AccountID   string `json:"account_id" binding:"required"`
+	ZoneID      string `json:"zone_id"`
+	ZoneName    string `json:"zone_name"`
+	PanelDomain string `json:"panel_domain"`
 }
 
 // UpdateCloudflareConfig handles PUT /api/tunnels/cloudflare
@@ -106,8 +107,8 @@ func (h *TunnelHandler) UpdateCloudflareConfig(c *gin.Context) {
 
 	// Save to DB
 	_, err := database.DB().Exec(
-		`UPDATE cloudflare_config SET api_token = ?, account_id = ?, zone_id = ?, zone_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1`,
-		req.APIToken, req.AccountID, req.ZoneID, req.ZoneName,
+		`UPDATE cloudflare_config SET api_token = ?, account_id = ?, zone_id = ?, zone_name = ?, panel_domain = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1`,
+		req.APIToken, req.AccountID, req.ZoneID, req.ZoneName, req.PanelDomain,
 	)
 	if err != nil {
 		httputil.Error(c, 500, "failed to save config: "+err.Error())
@@ -120,6 +121,7 @@ func (h *TunnelHandler) UpdateCloudflareConfig(c *gin.Context) {
 		cfg.CloudflareAccountID = req.AccountID
 		cfg.CloudflareZoneID = req.ZoneID
 		cfg.CloudflareZoneName = req.ZoneName
+		cfg.PanelDomain = req.PanelDomain
 	})
 
 	httputil.Success(c, gin.H{"message": "cloudflare config updated"})

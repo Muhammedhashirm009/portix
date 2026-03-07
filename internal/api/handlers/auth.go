@@ -149,8 +149,7 @@ func (h *AuthHandler) Setup(c *gin.Context) {
 	// Store Cloudflare config in DB
 	if req.CloudflareAPIToken != "" {
 		database.DB().Exec(
-			`INSERT OR REPLACE INTO cloudflare_config (id, api_token, account_id, zone_id, zone_name, panel_domain, updated_at) 
-			 VALUES (1, ?, ?, ?, ?, ?, ?)`,
+			`UPDATE cloudflare_config SET api_token = ?, account_id = ?, zone_id = ?, zone_name = ?, panel_domain = ?, updated_at = ? WHERE id = 1`,
 			req.CloudflareAPIToken, req.CloudflareAccountID, req.CloudflareZoneID, req.CloudflareZoneName, req.PanelDomain, time.Now(),
 		)
 	}
@@ -160,7 +159,8 @@ func (h *AuthHandler) Setup(c *gin.Context) {
 
 	// Auto-create tunnels if Cloudflare is configured
 	var tunnelResult *tunnel.SetupResult
-	if req.CloudflareAPIToken != "" && req.PanelDomain != "" && h.tunnelMgr != nil {
+	var tunnelError string
+	if req.CloudflareAPIToken != "" && req.PanelDomain != "" {
 		// Create a fresh Cloudflare client with the new credentials
 		cf := tunnel.NewCloudflareClient(
 			req.CloudflareAPIToken,
@@ -169,11 +169,15 @@ func (h *AuthHandler) Setup(c *gin.Context) {
 			req.CloudflareZoneName,
 		)
 		// Create a temporary manager with the new client for setup
-		setupMgr := tunnel.NewManager(cf, nil, h.cfg.DataDir, "", "")
-		result, err := setupMgr.SetupTunnels(req.PanelDomain)
-		if err != nil {
-			log.Printf("[setup] Tunnel auto-creation failed: %v", err)
-			// Don't fail setup — tunnels can be created later
+		dataDir := h.cfg.DataDir
+		if dataDir == "" {
+			dataDir = "/etc/tunnelpanel"
+		}
+		setupMgr := tunnel.NewManager(cf, nil, dataDir, "", "")
+		result, setupErr := setupMgr.SetupTunnels(req.PanelDomain)
+		if setupErr != nil {
+			log.Printf("[setup] Tunnel auto-creation failed: %v", setupErr)
+			tunnelError = setupErr.Error()
 		} else {
 			tunnelResult = result
 			// Update config with tunnel IDs
@@ -194,6 +198,9 @@ func (h *AuthHandler) Setup(c *gin.Context) {
 	}
 	if tunnelResult != nil {
 		response["tunnels"] = tunnelResult
+	}
+	if tunnelError != "" {
+		response["tunnel_error"] = tunnelError
 	}
 
 	httputil.Success(c, response)

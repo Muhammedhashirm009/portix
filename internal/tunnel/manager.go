@@ -401,21 +401,11 @@ func (m *Manager) writeCredentials(tunnelID, secret, filename string) error {
 
 // updateSystemdService updates a systemd service file to use the correct cloudflared config
 func (m *Manager) updateSystemdService(serviceName, configPath string) {
-	serviceContent := fmt.Sprintf(`[Unit]
-Description=Cloudflare Tunnel - %s
-After=network-online.target
-Wants=network-online.target
+	serviceContent := fmt.Sprintf("[Unit]\nDescription=Cloudflare Tunnel - %s\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=simple\nExecStart=/usr/bin/cloudflared tunnel --config %s run\nRestart=always\nRestartSec=5\nKillMode=process\n\n[Install]\nWantedBy=multi-user.target\n", serviceName, configPath)
 
-[Service]
-Type=simple
-ExecStart=/usr/bin/cloudflared tunnel --config %s run
-Restart=always
-RestartSec=5
-KillMode=process
-
-[Install]
-WantedBy=multi-user.target
-`, serviceName, configPath)
+	// Ensure Unix line endings (important when code is compiled from Windows)
+	serviceContent = strings.ReplaceAll(serviceContent, "\r\n", "\n")
+	serviceContent = strings.ReplaceAll(serviceContent, "\r", "\n")
 
 	servicePath := fmt.Sprintf("/etc/systemd/system/%s.service", serviceName)
 	os.WriteFile(servicePath, []byte(serviceContent), 0644)
