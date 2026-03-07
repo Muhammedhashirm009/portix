@@ -32,7 +32,7 @@ func SetupRouter(cfg *config.Config, tunnelMgr *tunnel.Manager) *gin.Engine {
 	r.Use(RateLimitMiddleware())
 
 	// --- Handlers ---
-	authHandler := handlers.NewAuthHandler(cfg)
+	authHandler := handlers.NewAuthHandler(cfg, tunnelMgr)
 	dashHandler := handlers.NewDashboardHandler()
 	tunnelHandler := handlers.NewTunnelHandler(cfg, tunnelMgr)
 	fileHandler := handlers.NewFileManagerHandler()

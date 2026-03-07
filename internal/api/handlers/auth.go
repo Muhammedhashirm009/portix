@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 	"time"
 
@@ -9,16 +10,18 @@ import (
 	"github.com/Muhammedhashirm009/tunnel-panel/internal/config"
 	"github.com/Muhammedhashirm009/tunnel-panel/internal/database"
 	"github.com/Muhammedhashirm009/tunnel-panel/internal/httputil"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/tunnel"
 )
 
 // AuthHandler handles authentication endpoints
 type AuthHandler struct {
-	cfg *config.Config
+	cfg       *config.Config
+	tunnelMgr *tunnel.Manager
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(cfg *config.Config) *AuthHandler {
-	return &AuthHandler{cfg: cfg}
+func NewAuthHandler(cfg *config.Config, tunnelMgr *tunnel.Manager) *AuthHandler {
+	return &AuthHandler{cfg: cfg, tunnelMgr: tunnelMgr}
 }
 
 // LoginRequest represents the login form data
@@ -95,6 +98,8 @@ type SetupRequest struct {
 	Password            string `json:"password" binding:"required"`
 	CloudflareAPIToken  string `json:"cloudflare_api_token"`
 	CloudflareAccountID string `json:"cloudflare_account_id"`
+	CloudflareZoneID    string `json:"cloudflare_zone_id"`
+	CloudflareZoneName  string `json:"cloudflare_zone_name"`
 	PanelDomain         string `json:"panel_domain"`
 }
 
@@ -133,6 +138,8 @@ func (h *AuthHandler) Setup(c *gin.Context) {
 		if req.CloudflareAPIToken != "" {
 			cfg.CloudflareAPIToken = req.CloudflareAPIToken
 			cfg.CloudflareAccountID = req.CloudflareAccountID
+			cfg.CloudflareZoneID = req.CloudflareZoneID
+			cfg.CloudflareZoneName = req.CloudflareZoneName
 		}
 		if req.PanelDomain != "" {
 			cfg.PanelDomain = req.PanelDomain
@@ -142,20 +149,52 @@ func (h *AuthHandler) Setup(c *gin.Context) {
 	// Store Cloudflare config in DB
 	if req.CloudflareAPIToken != "" {
 		database.DB().Exec(
-			"UPDATE cloudflare_config SET api_token = ?, account_id = ?, panel_domain = ?, updated_at = ? WHERE id = 1",
-			req.CloudflareAPIToken, req.CloudflareAccountID, req.PanelDomain, time.Now(),
+			`INSERT OR REPLACE INTO cloudflare_config (id, api_token, account_id, zone_id, zone_name, panel_domain, updated_at) 
+			 VALUES (1, ?, ?, ?, ?, ?, ?)`,
+			req.CloudflareAPIToken, req.CloudflareAccountID, req.CloudflareZoneID, req.CloudflareZoneName, req.PanelDomain, time.Now(),
 		)
 	}
 
 	// Mark setup complete
-	database.DB().Exec("UPDATE settings SET value = 'true' WHERE key = 'setup_complete'")
+	database.DB().Exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('setup_complete', 'true')")
+
+	// Auto-create tunnels if Cloudflare is configured
+	var tunnelResult *tunnel.SetupResult
+	if req.CloudflareAPIToken != "" && req.PanelDomain != "" && h.tunnelMgr != nil {
+		// Create a fresh Cloudflare client with the new credentials
+		cf := tunnel.NewCloudflareClient(
+			req.CloudflareAPIToken,
+			req.CloudflareAccountID,
+			req.CloudflareZoneID,
+			req.CloudflareZoneName,
+		)
+		// Create a temporary manager with the new client for setup
+		setupMgr := tunnel.NewManager(cf, nil, h.cfg.DataDir, "", "")
+		result, err := setupMgr.SetupTunnels(req.PanelDomain)
+		if err != nil {
+			log.Printf("[setup] Tunnel auto-creation failed: %v", err)
+			// Don't fail setup — tunnels can be created later
+		} else {
+			tunnelResult = result
+			// Update config with tunnel IDs
+			h.cfg.Update(func(cfg *config.Config) {
+				cfg.PanelTunnelID = result.PanelTunnelID
+				cfg.AppsTunnelID = result.AppsTunnelID
+			})
+		}
+	}
 
 	// Auto-login
 	token, _, _ := auth.Authenticate(req.Username, req.Password, secret, h.cfg.SessionExpiry)
 	c.SetCookie("tunnelpanel_token", token, h.cfg.SessionExpiry*3600, "/", "", true, true)
 
-	httputil.Success(c, gin.H{
+	response := gin.H{
 		"message": "setup completed successfully",
 		"token":   token,
-	})
+	}
+	if tunnelResult != nil {
+		response["tunnels"] = tunnelResult
+	}
+
+	httputil.Success(c, response)
 }

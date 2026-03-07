@@ -1,6 +1,7 @@
 package tunnel
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -271,4 +272,151 @@ type TunnelInfo struct {
 	ServiceStatus  string  `json:"service_status"`
 	Running        bool    `json:"running"`
 	CloudflareInfo *Tunnel `json:"cloudflare_info,omitempty"`
+}
+
+// SetupResult holds the result of the automated tunnel setup
+type SetupResult struct {
+	PanelTunnelID string `json:"panel_tunnel_id"`
+	AppsTunnelID  string `json:"apps_tunnel_id"`
+	PanelDomain   string `json:"panel_domain"`
+}
+
+// SetupTunnels creates both tunnels via Cloudflare API, writes credentials, and configures cloudflared
+func (m *Manager) SetupTunnels(panelDomain string) (*SetupResult, error) {
+	if m.cf == nil {
+		return nil, fmt.Errorf("cloudflare client not configured")
+	}
+
+	// 1. Verify API token
+	if err := m.cf.VerifyToken(); err != nil {
+		return nil, fmt.Errorf("invalid API token: %w", err)
+	}
+	log.Println("[tunnel] API token verified ✓")
+
+	// 2. Create Panel Tunnel (#1)
+	panelTunnel, panelSecret, err := m.cf.CreateTunnel("tunnelpanel-panel")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create panel tunnel: %w", err)
+	}
+	log.Printf("[tunnel] Created panel tunnel: %s (ID: %s)", panelTunnel.Name, panelTunnel.ID)
+
+	// 3. Create Apps Tunnel (#2)
+	appsTunnel, appsSecret, err := m.cf.CreateTunnel("tunnelpanel-apps")
+	if err != nil {
+		// Cleanup panel tunnel on failure
+		m.cf.DeleteTunnel(panelTunnel.ID)
+		return nil, fmt.Errorf("failed to create apps tunnel: %w", err)
+	}
+	log.Printf("[tunnel] Created apps tunnel: %s (ID: %s)", appsTunnel.Name, appsTunnel.ID)
+
+	// 4. Write credential files
+	if err := m.writeCredentials(panelTunnel.ID, panelSecret, "tunnel-panel-creds.json"); err != nil {
+		return nil, fmt.Errorf("failed to write panel tunnel credentials: %w", err)
+	}
+	if err := m.writeCredentials(appsTunnel.ID, appsSecret, "tunnel-apps-creds.json"); err != nil {
+		return nil, fmt.Errorf("failed to write apps tunnel credentials: %w", err)
+	}
+	log.Println("[tunnel] Credentials written ✓")
+
+	// 5. Write cloudflared config for panel tunnel
+	panelConfig := TunnelConfig{
+		Tunnel:          panelTunnel.ID,
+		CredentialsFile: filepath.Join(m.configDir, "tunnel-panel-creds.json"),
+		Ingress: []IngressRule{
+			{Hostname: panelDomain, Service: "http://localhost:8443"},
+			{Service: "http_status:404"},
+		},
+	}
+	panelConfigData, _ := yaml.Marshal(panelConfig)
+	panelConfigPath := filepath.Join(m.configDir, "tunnel-panel.yml")
+	if err := os.WriteFile(panelConfigPath, panelConfigData, 0600); err != nil {
+		return nil, fmt.Errorf("failed to write panel tunnel config: %w", err)
+	}
+
+	// 6. Write cloudflared config for apps tunnel
+	m.tunnelID = appsTunnel.ID
+	m.tunnelSecret = appsSecret
+	appsConfig := TunnelConfig{
+		Tunnel:          appsTunnel.ID,
+		CredentialsFile: filepath.Join(m.configDir, "tunnel-apps-creds.json"),
+		Ingress: []IngressRule{
+			{Service: "http_status:404"}, // catch-all, rules added later
+		},
+	}
+	appsConfigData, _ := yaml.Marshal(appsConfig)
+	appsConfigPath := filepath.Join(m.configDir, "tunnel-apps.yml")
+	if err := os.WriteFile(appsConfigPath, appsConfigData, 0600); err != nil {
+		return nil, fmt.Errorf("failed to write apps tunnel config: %w", err)
+	}
+	log.Println("[tunnel] Configs written ✓")
+
+	// 7. Create DNS CNAME for panel domain
+	_, err = m.cf.CreateDNSRecord(panelDomain, panelTunnel.ID)
+	if err != nil {
+		log.Printf("[tunnel] Warning: DNS record creation failed (may already exist): %v", err)
+	} else {
+		log.Printf("[tunnel] DNS CNAME created: %s → %s.cfargotunnel.com", panelDomain, panelTunnel.ID)
+	}
+
+	// 8. Update systemd service files to use correct config paths
+	m.updateSystemdService("tunnelpanel-panel-tunnel", panelConfigPath)
+	m.updateSystemdService("tunnelpanel-apps-tunnel", appsConfigPath)
+
+	// 9. Store tunnel IDs in database
+	database.DB().Exec(
+		"UPDATE cloudflare_config SET tunnel_panel_id = ?, tunnel_apps_id = ? WHERE id = 1",
+		panelTunnel.ID, appsTunnel.ID,
+	)
+
+	// 10. Reload systemd and start tunnels
+	exec.Command("systemctl", "daemon-reload").Run()
+	exec.Command("systemctl", "enable", "tunnelpanel-panel-tunnel").Run()
+	exec.Command("systemctl", "enable", "tunnelpanel-apps-tunnel").Run()
+	exec.Command("systemctl", "start", "tunnelpanel-panel-tunnel").Run()
+	exec.Command("systemctl", "start", "tunnelpanel-apps-tunnel").Run()
+	log.Println("[tunnel] Tunnels started ✓")
+
+	return &SetupResult{
+		PanelTunnelID: panelTunnel.ID,
+		AppsTunnelID:  appsTunnel.ID,
+		PanelDomain:   panelDomain,
+	}, nil
+}
+
+// writeCredentials writes a cloudflared tunnel credentials JSON file
+func (m *Manager) writeCredentials(tunnelID, secret, filename string) error {
+	creds := map[string]string{
+		"AccountTag":   m.cf.accountID,
+		"TunnelSecret": secret,
+		"TunnelID":     tunnelID,
+	}
+
+	data, err := json.MarshalIndent(creds, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(filepath.Join(m.configDir, filename), data, 0600)
+}
+
+// updateSystemdService updates a systemd service file to use the correct cloudflared config
+func (m *Manager) updateSystemdService(serviceName, configPath string) {
+	serviceContent := fmt.Sprintf(`[Unit]
+Description=Cloudflare Tunnel - %s
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/cloudflared tunnel --config %s run
+Restart=always
+RestartSec=5
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target
+`, serviceName, configPath)
+
+	servicePath := fmt.Sprintf("/etc/systemd/system/%s.service", serviceName)
+	os.WriteFile(servicePath, []byte(serviceContent), 0644)
 }

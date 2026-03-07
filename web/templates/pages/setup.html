@@ -7,32 +7,106 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Title}}</title>
     <link rel="stylesheet" href="/static/css/main.css">
+    <style>
+        .setup-steps {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        .setup-step {
+            flex: 1;
+            text-align: center;
+            padding: 8px;
+            border-radius: 8px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .setup-step.active {
+            border-color: var(--primary-color);
+            color: var(--text-primary);
+        }
+
+        .setup-step.done {
+            border-color: var(--success-color);
+            color: var(--success-color);
+        }
+
+        .help-text {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .help-text a {
+            color: var(--text-accent);
+        }
+
+        .setup-log {
+            background: var(--bg-primary);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+            margin-top: 12px;
+        }
+
+        .setup-log.active {
+            display: block;
+        }
+
+        .setup-log .log-line {
+            margin-bottom: 4px;
+        }
+
+        .setup-log .success {
+            color: var(--success-color);
+        }
+
+        .setup-log .error {
+            color: var(--danger-color);
+        }
+    </style>
 </head>
 
 <body>
     <div class="login-page">
-        <div class="login-card" style="width: 520px;">
+        <div class="login-card" style="width: 560px;">
             <div class="logo">
                 <div class="icon">⚡</div>
                 <h2>Welcome to TunnelPanel</h2>
                 <p>Let's set up your server control panel</p>
             </div>
 
+            <div class="setup-steps">
+                <div class="setup-step active" id="step1">1. Admin Account</div>
+                <div class="setup-step" id="step2">2. Cloudflare</div>
+                <div class="setup-step" id="step3">3. Done!</div>
+            </div>
+
             <div class="login-error" id="setupError"></div>
 
             <form id="setupForm" onsubmit="handleSetup(event)">
-                <h3 style="margin-bottom:12px; font-size:1rem;">Admin Account</h3>
+                <h3 style="margin-bottom:12px; font-size:1rem;">👤 Admin Account</h3>
 
                 <div class="form-group">
                     <label for="username">Username</label>
-                    <input type="text" class="form-control" id="username" name="username" placeholder="admin" required
-                        autofocus value="admin">
+                    <input type="text" class="form-control" id="username" placeholder="admin" required autofocus
+                        value="admin">
                 </div>
 
                 <div class="form-group">
                     <label for="password">Password</label>
-                    <input type="password" class="form-control" id="password" name="password"
-                        placeholder="Strong password" required minlength="8">
+                    <input type="password" class="form-control" id="password" placeholder="Strong password (8+ chars)"
+                        required minlength="8">
                 </div>
 
                 <div class="form-group">
@@ -43,35 +117,70 @@
 
                 <hr style="border-color: var(--border-color); margin: 20px 0;">
 
-                <h3 style="margin-bottom:12px; font-size:1rem;">Cloudflare Integration <span
-                        style="color:var(--text-muted); font-weight:400; font-size:0.8rem;">(optional, can configure
-                        later)</span></h3>
+                <h3 style="margin-bottom:4px; font-size:1rem;">☁️ Cloudflare Integration</h3>
+                <p class="help-text" style="margin-bottom:16px;">
+                    Tunnels will be auto-created. <a href="https://dash.cloudflare.com/profile/api-tokens"
+                        target="_blank">Create API Token →</a>
+                    <br>Required permissions: <strong>Zone:DNS:Edit</strong>, <strong>Zone:Zone:Read</strong>,
+                    <strong>Account:Tunnel:Edit</strong>
+                </p>
 
                 <div class="form-group">
                     <label for="cf_token">API Token</label>
                     <input type="password" class="form-control" id="cf_token" placeholder="Cloudflare API Token">
                 </div>
 
-                <div class="form-group">
-                    <label for="cf_account">Account ID</label>
-                    <input type="text" class="form-control" id="cf_account" placeholder="Cloudflare Account ID">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                    <div class="form-group">
+                        <label for="cf_account">Account ID</label>
+                        <input type="text" class="form-control" id="cf_account" placeholder="Account ID">
+                        <div class="help-text">Dashboard → domain → right sidebar</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="cf_zone_id">Zone ID</label>
+                        <input type="text" class="form-control" id="cf_zone_id" placeholder="Zone ID">
+                        <div class="help-text">Same location, below Account ID</div>
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="panel_domain">Panel Domain</label>
-                    <input type="text" class="form-control" id="panel_domain" placeholder="panel.yourdomain.com">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                    <div class="form-group">
+                        <label for="cf_zone_name">Zone Name (Domain)</label>
+                        <input type="text" class="form-control" id="cf_zone_name" placeholder="example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="panel_domain">Panel Domain</label>
+                        <input type="text" class="form-control" id="panel_domain" placeholder="panel.example.com">
+                        <div class="help-text">Subdomain to access this panel</div>
+                    </div>
                 </div>
+
+                <div class="setup-log" id="setupLog"></div>
 
                 <button type="submit" class="btn btn-primary" id="setupBtn"
-                    style="width:100%; justify-content:center; margin-top:12px;">
-                    <span id="setupBtnText">Complete Setup</span>
+                    style="width:100%; justify-content:center; margin-top:16px;">
+                    <span id="setupBtnText">🚀 Complete Setup</span>
                     <div class="spinner" id="setupSpinner" style="display:none;"></div>
                 </button>
+
+                <p style="text-align:center; margin-top:12px; font-size:0.75rem; color:var(--text-muted);">
+                    Cloudflare is optional — you can configure it later in Settings.
+                </p>
             </form>
         </div>
     </div>
 
     <script>
+        function addLog(msg, type = '') {
+            const log = document.getElementById('setupLog');
+            log.classList.add('active');
+            const line = document.createElement('div');
+            line.className = 'log-line ' + type;
+            line.textContent = msg;
+            log.appendChild(line);
+            log.scrollTop = log.scrollHeight;
+        }
+
         async function handleSetup(e) {
             e.preventDefault();
             const errorEl = document.getElementById('setupError');
@@ -87,37 +196,83 @@
             const btn = document.getElementById('setupBtn');
             btn.disabled = true;
             document.getElementById('setupSpinner').style.display = 'block';
-            document.getElementById('setupBtnText').textContent = 'Setting up...';
             errorEl.style.display = 'none';
 
+            const cfToken = document.getElementById('cf_token').value;
+            const hasCF = cfToken.length > 0;
+
+            if (hasCF) {
+                document.getElementById('setupBtnText').textContent = 'Creating admin account...';
+                addLog('✓ Creating admin account...');
+            } else {
+                document.getElementById('setupBtnText').textContent = 'Setting up...';
+            }
+
+            // Mark step 1 done
+            document.getElementById('step1').classList.remove('active');
+            document.getElementById('step1').classList.add('done');
+            document.getElementById('step1').textContent = '✓ Admin';
+            document.getElementById('step2').classList.add('active');
+
             try {
+                if (hasCF) {
+                    addLog('✓ Configuring Cloudflare...');
+                    addLog('→ Creating Panel Tunnel (#1)...');
+                    addLog('→ Creating App Tunnel (#2)...');
+                    addLog('→ Writing credentials & configs...');
+                    addLog('→ Creating DNS records...');
+                    addLog('→ Starting tunnel services...');
+                    document.getElementById('setupBtnText').textContent = 'Creating tunnels (this takes ~15s)...';
+                }
+
                 const resp = await fetch('/api/setup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         username: document.getElementById('username').value,
                         password: pw1,
-                        cloudflare_api_token: document.getElementById('cf_token').value,
+                        cloudflare_api_token: cfToken,
                         cloudflare_account_id: document.getElementById('cf_account').value,
+                        cloudflare_zone_id: document.getElementById('cf_zone_id').value,
+                        cloudflare_zone_name: document.getElementById('cf_zone_name').value,
                         panel_domain: document.getElementById('panel_domain').value
                     })
                 });
 
                 const data = await resp.json();
                 if (data.success) {
-                    window.location.href = '/dashboard';
+                    // Mark steps done
+                    document.getElementById('step2').classList.remove('active');
+                    document.getElementById('step2').classList.add('done');
+                    document.getElementById('step2').textContent = '✓ Cloudflare';
+                    document.getElementById('step3').classList.add('active');
+                    document.getElementById('step3').classList.add('done');
+
+                    if (data.data && data.data.tunnels) {
+                        addLog('✓ Panel Tunnel: ' + data.data.tunnels.panel_tunnel_id, 'success');
+                        addLog('✓ Apps Tunnel: ' + data.data.tunnels.apps_tunnel_id, 'success');
+                        addLog('✓ Panel accessible at: https://' + data.data.tunnels.panel_domain, 'success');
+                    }
+                    addLog('✅ Setup complete! Redirecting...', 'success');
+
+                    document.getElementById('setupBtnText').textContent = '✅ Setup Complete!';
+                    setTimeout(() => { window.location.href = '/dashboard'; }, 2000);
                 } else {
                     errorEl.textContent = data.error || 'Setup failed';
                     errorEl.style.display = 'block';
+                    addLog('❌ ' + (data.error || 'Setup failed'), 'error');
+                    btn.disabled = false;
+                    document.getElementById('setupSpinner').style.display = 'none';
+                    document.getElementById('setupBtnText').textContent = '🚀 Complete Setup';
                 }
             } catch (err) {
-                errorEl.textContent = 'Connection error';
+                errorEl.textContent = 'Connection error: ' + err.message;
                 errorEl.style.display = 'block';
+                addLog('❌ Connection error', 'error');
+                btn.disabled = false;
+                document.getElementById('setupSpinner').style.display = 'none';
+                document.getElementById('setupBtnText').textContent = '🚀 Complete Setup';
             }
-
-            btn.disabled = false;
-            document.getElementById('setupSpinner').style.display = 'none';
-            document.getElementById('setupBtnText').textContent = 'Complete Setup';
         }
     </script>
 </body>
