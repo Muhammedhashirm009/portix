@@ -59,10 +59,44 @@ func (m *Manager) AllocatePort(appType string, appID int) (int, error) {
 	return m.portAllocator.Allocate(appType, appID)
 }
 
+// ensureConfigured loads CF credentials and tunnel IDs from DB if not already set
+func (m *Manager) ensureConfigured() {
+	if m.cf != nil && m.tunnelID != "" {
+		return // already configured
+	}
+
+	var apiToken, accountID, zoneID, zoneName, appsTunnelID string
+	err := database.DB().QueryRow(
+		"SELECT COALESCE(api_token,''), COALESCE(account_id,''), COALESCE(zone_id,''), COALESCE(zone_name,''), COALESCE(tunnel_apps_id,'') FROM cloudflare_config WHERE id = 1",
+	).Scan(&apiToken, &accountID, &zoneID, &zoneName, &appsTunnelID)
+
+	if err != nil || apiToken == "" {
+		log.Printf("[tunnel] ensureConfigured: no CF config in DB")
+		return
+	}
+
+	if m.cf == nil {
+		m.cf = NewCloudflareClient(apiToken, accountID, zoneID, zoneName)
+		log.Printf("[tunnel] ensureConfigured: loaded CF client from DB")
+	}
+
+	if m.tunnelID == "" && appsTunnelID != "" {
+		m.tunnelID = appsTunnelID
+		log.Printf("[tunnel] ensureConfigured: loaded apps tunnel ID from DB: %s", appsTunnelID)
+	}
+
+	if m.configDir == "" {
+		m.configDir = "/etc/tunnelpanel"
+	}
+}
+
 // AddIngressRule adds a domain → localhost:port mapping to Tunnel #2
 func (m *Manager) AddIngressRule(domain string, port int, appType string, appID int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	// Load CF config from DB if not already set
+	m.ensureConfigured()
 
 	log.Printf("[tunnel] ── Adding ingress rule ──")
 	log.Printf("[tunnel]   Domain:  %s", domain)

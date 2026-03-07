@@ -41,20 +41,30 @@ func main() {
 	_, used, avail := pm.GetStats()
 	log.Printf("Port manager ready: range %d-%d (%d used, %d available)", minP, maxP, used, avail)
 
-	// Initialize tunnel manager
+	// Initialize tunnel manager — try config first, then DB
 	var tunnelMgr *tunnel.Manager
-	if cfg.CloudflareAPIToken != "" {
-		cf := tunnel.NewCloudflareClient(
-			cfg.CloudflareAPIToken,
-			cfg.CloudflareAccountID,
-			cfg.CloudflareZoneID,
-			cfg.CloudflareZoneName,
-		)
+
+	// Try to load CF config from DB if not in config.json
+	cfToken := cfg.CloudflareAPIToken
+	cfAccount := cfg.CloudflareAccountID
+	cfZoneID := cfg.CloudflareZoneID
+	cfZoneName := cfg.CloudflareZoneName
+	appsTunnelID := cfg.AppsTunnelID
+
+	if cfToken == "" {
+		// Try DB
+		database.DB().QueryRow(
+			"SELECT COALESCE(api_token,''), COALESCE(account_id,''), COALESCE(zone_id,''), COALESCE(zone_name,''), COALESCE(tunnel_apps_id,'') FROM cloudflare_config WHERE id = 1",
+		).Scan(&cfToken, &cfAccount, &cfZoneID, &cfZoneName, &appsTunnelID)
+	}
+
+	if cfToken != "" {
+		cf := tunnel.NewCloudflareClient(cfToken, cfAccount, cfZoneID, cfZoneName)
 		pa := tunnel.NewPortAllocator(cfg.PortRangeMin, cfg.PortRangeMax)
-		tunnelMgr = tunnel.NewManager(cf, pa, cfg.DataDir, cfg.AppsTunnelID, "")
-		log.Println("Tunnel manager initialized")
+		tunnelMgr = tunnel.NewManager(cf, pa, cfg.DataDir, appsTunnelID, "")
+		log.Printf("Tunnel manager initialized (apps tunnel: %s)", appsTunnelID)
 	} else {
-		// Create a stub manager (no Cloudflare configured yet)
+		// No CF config anywhere — create stub
 		pa := tunnel.NewPortAllocator(cfg.PortRangeMin, cfg.PortRangeMax)
 		tunnelMgr = tunnel.NewManager(nil, pa, cfg.DataDir, "", "")
 		log.Println("Tunnel manager initialized (Cloudflare not configured)")
