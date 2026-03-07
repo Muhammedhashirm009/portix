@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/Muhammedhashirm009/tunnel-panel/internal/api/handlers"
 	"github.com/Muhammedhashirm009/tunnel-panel/internal/config"
+	"github.com/Muhammedhashirm009/tunnel-panel/internal/sites"
 	"github.com/Muhammedhashirm009/tunnel-panel/internal/tunnel"
 	"github.com/Muhammedhashirm009/tunnel-panel/web"
 )
@@ -19,7 +20,6 @@ func SetupRouter(cfg *config.Config, tunnelMgr *tunnel.Manager) *gin.Engine {
 	r.Use(gin.Logger(), gin.Recovery())
 
 	// --- Load HTML templates from embedded FS ---
-	// web.FS paths start from "templates/" and "static/" (relative to web/ directory)
 	tmpl := template.Must(template.New("").ParseFS(web.FS, "templates/pages/*.html", "templates/partials/*.html"))
 	r.SetHTMLTemplate(tmpl)
 
@@ -27,7 +27,7 @@ func SetupRouter(cfg *config.Config, tunnelMgr *tunnel.Manager) *gin.Engine {
 	staticFS, _ := fs.Sub(web.FS, "static")
 	r.StaticFS("/static", http.FS(staticFS))
 
-	// --- Setup check middleware (redirect to /setup if not configured) ---
+	// --- Setup check middleware ---
 	r.Use(SetupCheckMiddleware())
 	r.Use(RateLimitMiddleware())
 
@@ -35,6 +35,9 @@ func SetupRouter(cfg *config.Config, tunnelMgr *tunnel.Manager) *gin.Engine {
 	authHandler := handlers.NewAuthHandler(cfg)
 	dashHandler := handlers.NewDashboardHandler()
 	tunnelHandler := handlers.NewTunnelHandler(cfg, tunnelMgr)
+	fileHandler := handlers.NewFileManagerHandler()
+	siteMgr := sites.NewManager(tunnelMgr)
+	sitesHandler := handlers.NewSitesHandler(siteMgr)
 
 	// --- Public routes ---
 	r.GET("/login", func(c *gin.Context) {
@@ -64,72 +67,56 @@ func SetupRouter(cfg *config.Config, tunnelMgr *tunnel.Manager) *gin.Engine {
 		protected.GET("/dashboard", func(c *gin.Context) {
 			username, _ := c.Get("username")
 			c.HTML(http.StatusOK, "dashboard.html", gin.H{
-				"Title":    "Dashboard — TunnelPanel",
-				"Active":   "dashboard",
-				"Username": username,
+				"Title": "Dashboard — TunnelPanel", "Active": "dashboard", "Username": username,
 			})
 		})
 
 		protected.GET("/tunnels", func(c *gin.Context) {
 			username, _ := c.Get("username")
 			c.HTML(http.StatusOK, "tunnels.html", gin.H{
-				"Title":    "Tunnel Manager — TunnelPanel",
-				"Active":   "tunnels",
-				"Username": username,
+				"Title": "Tunnel Manager — TunnelPanel", "Active": "tunnels", "Username": username,
 			})
 		})
 
 		protected.GET("/sites", func(c *gin.Context) {
 			username, _ := c.Get("username")
 			c.HTML(http.StatusOK, "sites.html", gin.H{
-				"Title":    "Sites — TunnelPanel",
-				"Active":   "sites",
-				"Username": username,
+				"Title": "Sites — TunnelPanel", "Active": "sites", "Username": username,
 			})
 		})
 
 		protected.GET("/docker", func(c *gin.Context) {
 			username, _ := c.Get("username")
 			c.HTML(http.StatusOK, "docker.html", gin.H{
-				"Title":    "Docker — TunnelPanel",
-				"Active":   "docker",
-				"Username": username,
+				"Title": "Docker — TunnelPanel", "Active": "docker", "Username": username,
 			})
 		})
 
 		protected.GET("/files", func(c *gin.Context) {
 			username, _ := c.Get("username")
 			c.HTML(http.StatusOK, "filemanager.html", gin.H{
-				"Title":    "File Manager — TunnelPanel",
-				"Active":   "files",
-				"Username": username,
+				"Title": "File Manager — TunnelPanel", "Active": "files", "Username": username,
 			})
 		})
 
 		protected.GET("/databases", func(c *gin.Context) {
 			username, _ := c.Get("username")
 			c.HTML(http.StatusOK, "databases.html", gin.H{
-				"Title":    "Databases — TunnelPanel",
-				"Active":   "databases",
-				"Username": username,
+				"Title": "Databases — TunnelPanel", "Active": "databases", "Username": username,
 			})
 		})
 
 		protected.GET("/terminal", func(c *gin.Context) {
 			username, _ := c.Get("username")
 			c.HTML(http.StatusOK, "terminal.html", gin.H{
-				"Title":    "Terminal — TunnelPanel",
-				"Active":   "terminal",
-				"Username": username,
+				"Title": "Terminal — TunnelPanel", "Active": "terminal", "Username": username,
 			})
 		})
 
 		protected.GET("/settings", func(c *gin.Context) {
 			username, _ := c.Get("username")
 			c.HTML(http.StatusOK, "settings.html", gin.H{
-				"Title":    "Settings — TunnelPanel",
-				"Active":   "settings",
-				"Username": username,
+				"Title": "Settings — TunnelPanel", "Active": "settings", "Username": username,
 			})
 		})
 	}
@@ -155,6 +142,28 @@ func SetupRouter(cfg *config.Config, tunnelMgr *tunnel.Manager) *gin.Engine {
 		protectedAPI.GET("/tunnels/cloudflare", tunnelHandler.GetCloudflareConfig)
 		protectedAPI.PUT("/tunnels/cloudflare", tunnelHandler.UpdateCloudflareConfig)
 		protectedAPI.GET("/tunnels/zones", tunnelHandler.ListZones)
+
+		// File Manager
+		protectedAPI.GET("/files/browse", fileHandler.Browse)
+		protectedAPI.GET("/files/read", fileHandler.ReadFile)
+		protectedAPI.POST("/files/write", fileHandler.WriteFile)
+		protectedAPI.POST("/files/create", fileHandler.CreateFile)
+		protectedAPI.POST("/files/rename", fileHandler.Rename)
+		protectedAPI.POST("/files/move", fileHandler.Move)
+		protectedAPI.POST("/files/copy", fileHandler.CopyFiles)
+		protectedAPI.POST("/files/delete", fileHandler.Delete)
+		protectedAPI.POST("/files/chmod", fileHandler.Chmod)
+		protectedAPI.GET("/files/search", fileHandler.Search)
+		protectedAPI.POST("/files/upload", fileHandler.Upload)
+		protectedAPI.GET("/files/download", fileHandler.Download)
+
+		// Sites
+		protectedAPI.GET("/sites", sitesHandler.List)
+		protectedAPI.GET("/sites/:id", sitesHandler.Get)
+		protectedAPI.POST("/sites", sitesHandler.Create)
+		protectedAPI.DELETE("/sites/:id", sitesHandler.Delete)
+		protectedAPI.PUT("/sites/:id/php", sitesHandler.UpdatePHP)
+		protectedAPI.GET("/sites/php-versions", sitesHandler.GetPHPVersions)
 	}
 
 	return r

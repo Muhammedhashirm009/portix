@@ -7,6 +7,139 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Title}}</title>
     <link rel="stylesheet" href="/static/css/main.css">
+    <style>
+        .fm-toolbar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .fm-breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.85rem;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .fm-breadcrumb a {
+            color: var(--text-accent);
+            text-decoration: none;
+        }
+
+        .fm-breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .fm-breadcrumb .sep {
+            color: var(--text-muted);
+        }
+
+        .fm-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .fm-table th {
+            text-align: left;
+            padding: 8px 12px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .fm-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            font-size: 0.85rem;
+        }
+
+        .fm-table tr:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .fm-table .name {
+            cursor: pointer;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .fm-table .name:hover {
+            color: var(--text-accent);
+        }
+
+        .fm-icon {
+            font-size: 1.1rem;
+        }
+
+        .fm-actions {
+            display: flex;
+            gap: 4px;
+        }
+
+        .fm-actions button {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 4px;
+            font-size: 0.85rem;
+            border-radius: 4px;
+        }
+
+        .fm-actions button:hover {
+            background: var(--glass-bg);
+            color: var(--text-primary);
+        }
+
+        .fm-info {
+            display: flex;
+            gap: 16px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .fm-search {
+            display: flex;
+            gap: 8px;
+        }
+
+        .editor-container {
+            display: none;
+        }
+
+        .editor-container.active {
+            display: block;
+        }
+
+        .editor-textarea {
+            width: 100%;
+            min-height: 400px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            resize: vertical;
+            tab-size: 4;
+        }
+
+        .editor-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+    </style>
 </head>
 
 <body>
@@ -17,22 +150,312 @@
                 <h1>File Manager</h1>
                 <p>Browse, edit, and manage server files</p>
             </div>
+
             <div class="page-body">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="empty-state">
-                            <div class="icon">📁</div>
-                            <p>File Manager will be available in Phase 2</p>
-                            <p style="font-size:0.8rem; color:var(--text-muted);">Browse files, code editor,
-                                upload/download, permissions management.</p>
+                <!-- Browser View -->
+                <div id="browserView">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="fm-breadcrumb" id="breadcrumb"></div>
+                            <div class="fm-search">
+                                <input type="text" class="form-control" id="searchInput" placeholder="Search files..."
+                                    style="width:200px; height:32px; font-size:0.85rem;">
+                                <button class="btn btn-ghost btn-sm" onclick="searchFiles()">🔍</button>
+                            </div>
+                        </div>
+                        <div class="card-body" style="padding:0;">
+                            <div class="fm-toolbar"
+                                style="padding:8px 16px; border-bottom:1px solid var(--glass-border);">
+                                <button class="btn btn-ghost btn-sm" onclick="navigateUp()">⬆ Up</button>
+                                <button class="btn btn-ghost btn-sm" onclick="refreshDir()">↻ Refresh</button>
+                                <button class="btn btn-primary btn-sm" onclick="showCreateModal('file')">📄 New
+                                    File</button>
+                                <button class="btn btn-primary btn-sm" onclick="showCreateModal('dir')">📁 New
+                                    Folder</button>
+                                <button class="btn btn-ghost btn-sm" onclick="showUploadModal()">⬆ Upload</button>
+                                <div class="fm-info" id="dirInfo" style="margin-left:auto;"></div>
+                            </div>
+                            <div class="table-container">
+                                <table class="fm-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Size</th>
+                                            <th>Permissions</th>
+                                            <th>Modified</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="fileList"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Editor View -->
+                <div class="editor-container" id="editorView">
+                    <div class="card">
+                        <div class="card-header">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <button class="btn btn-ghost btn-sm" onclick="closeEditor()">← Back</button>
+                                <h3 id="editorTitle">Editing file</h3>
+                                <span class="badge badge-info" id="editorLang">text</span>
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="saveFile()">💾 Save</button>
+                        </div>
+                        <div class="card-body">
+                            <textarea class="editor-textarea" id="editorContent" spellcheck="false"></textarea>
                         </div>
                     </div>
                 </div>
             </div>
         </main>
     </div>
+
+    <!-- Create Modal -->
+    <div class="modal-overlay" id="createModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="createModalTitle">New File</h3>
+                <button class="modal-close" onclick="closeModal('createModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" class="form-control" id="createName" placeholder="filename.txt">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closeModal('createModal')">Cancel</button>
+                <button class="btn btn-primary" id="createBtn" onclick="createItem()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rename Modal -->
+    <div class="modal-overlay" id="renameModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Rename</h3>
+                <button class="modal-close" onclick="closeModal('renameModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>New name</label>
+                    <input type="text" class="form-control" id="renameName">
+                    <input type="hidden" id="renamePath">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closeModal('renameModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="renameItem()">Rename</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Modal -->
+    <div class="modal-overlay" id="uploadModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Upload File</h3>
+                <button class="modal-close" onclick="closeModal('uploadModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Select file</label>
+                    <input type="file" id="uploadFile" class="form-control">
+                </div>
+                <div id="uploadProgress" style="display:none;">
+                    <div class="stat-bar">
+                        <div class="stat-bar-fill" id="uploadBar" style="width:0%"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closeModal('uploadModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="uploadFile()">Upload</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
     <script src="/static/js/api.js"></script>
     <script src="/static/js/app.js"></script>
+    <script>
+        let currentPath = '/';
+        let createType = 'file';
+
+        async function loadDir(path) {
+            currentPath = path || '/';
+            const data = await API.get('/files/browse?path=' + encodeURIComponent(currentPath));
+            if (!data.success) { showToast(data.error, 'error'); return; }
+
+            const r = data.data;
+
+            // Breadcrumb
+            document.getElementById('breadcrumb').innerHTML = r.breadcrumb.map((p, i) =>
+                (i > 0 ? '<span class="sep">/</span>' : '') +
+                `<a href="#" onclick="loadDir('${p.path}'); return false;">${p.name}</a>`
+            ).join('');
+
+            // Info
+            document.getElementById('dirInfo').textContent = `${r.total_dirs} folders, ${r.total_files} files`;
+
+            // File list
+            const body = document.getElementById('fileList');
+            if (r.items.length === 0) {
+                body.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="icon">📂</div><p>Empty directory</p></div></td></tr>';
+                return;
+            }
+
+            body.innerHTML = r.items.map(f => {
+                const icon = f.is_dir ? '📁' : getFileIcon(f.extension);
+                const size = f.is_dir ? '—' : formatBytes(f.size);
+                const mod = new Date(f.mod_time).toLocaleString();
+                const clickAction = f.is_dir
+                    ? `loadDir('${f.path}')`
+                    : `editFile('${f.path}')`;
+
+                return `<tr>
+                    <td><span class="name" onclick="${clickAction}"><span class="fm-icon">${icon}</span>${f.name}${f.is_symlink ? ' →' : ''}</span></td>
+                    <td style="color:var(--text-muted);">${size}</td>
+                    <td style="font-family:'JetBrains Mono',monospace; font-size:0.8rem; color:var(--text-muted);">${f.mode}</td>
+                    <td style="color:var(--text-muted); font-size:0.8rem;">${mod}</td>
+                    <td>
+                        <div class="fm-actions">
+                            <button onclick="showRenameModal('${f.path}', '${f.name}')" title="Rename">✏️</button>
+                            <button onclick="downloadItem('${f.path}')" title="Download">⬇</button>
+                            <button onclick="deleteItem('${f.path}', '${f.name}')" title="Delete">🗑️</button>
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function getFileIcon(ext) {
+            const icons = { php: '🐘', js: '🟨', css: '🎨', html: '🌐', json: '📋', py: '🐍', go: '🔵', sql: '🗄️', md: '📝', sh: '⚙️', yml: '📐', yaml: '📐', conf: '⚙️', log: '📋', txt: '📄', zip: '📦', tar: '📦', gz: '📦', jpg: '🖼️', png: '🖼️', gif: '🖼️', svg: '🖼️' };
+            return icons[ext] || '📄';
+        }
+
+        function navigateUp() {
+            const parent = currentPath.split('/').slice(0, -1).join('/') || '/';
+            loadDir(parent);
+        }
+
+        function refreshDir() { loadDir(currentPath); }
+
+        async function editFile(path) {
+            const data = await API.get('/files/read?path=' + encodeURIComponent(path));
+            if (!data.success) { showToast(data.error, 'error'); return; }
+
+            document.getElementById('browserView').style.display = 'none';
+            document.getElementById('editorView').classList.add('active');
+            document.getElementById('editorTitle').textContent = data.data.name;
+            document.getElementById('editorLang').textContent = data.data.language;
+            document.getElementById('editorContent').value = data.data.content;
+            document.getElementById('editorContent').dataset.path = data.data.path;
+            if (data.data.read_only) document.getElementById('editorContent').readOnly = true;
+        }
+
+        function closeEditor() {
+            document.getElementById('editorView').classList.remove('active');
+            document.getElementById('browserView').style.display = 'block';
+            document.getElementById('editorContent').readOnly = false;
+        }
+
+        async function saveFile() {
+            const path = document.getElementById('editorContent').dataset.path;
+            const content = document.getElementById('editorContent').value;
+            const data = await API.post('/files/write', { path, content });
+            if (data.success) showToast('File saved', 'success');
+            else showToast(data.error, 'error');
+        }
+
+        function showCreateModal(type) {
+            createType = type;
+            document.getElementById('createModalTitle').textContent = type === 'dir' ? 'New Folder' : 'New File';
+            document.getElementById('createName').value = '';
+            document.getElementById('createName').placeholder = type === 'dir' ? 'folder-name' : 'filename.txt';
+            document.getElementById('createModal').classList.add('active');
+        }
+
+        async function createItem() {
+            const name = document.getElementById('createName').value;
+            if (!name) return;
+            const path = currentPath + (currentPath.endsWith('/') ? '' : '/') + name;
+            const data = await API.post('/files/create', { path, is_dir: createType === 'dir' });
+            if (data.success) { showToast('Created', 'success'); closeModal('createModal'); refreshDir(); }
+            else showToast(data.error, 'error');
+        }
+
+        function showRenameModal(path, name) {
+            document.getElementById('renamePath').value = path;
+            document.getElementById('renameName').value = name;
+            document.getElementById('renameModal').classList.add('active');
+        }
+
+        async function renameItem() {
+            const path = document.getElementById('renamePath').value;
+            const newName = document.getElementById('renameName').value;
+            const data = await API.post('/files/rename', { path, new_name: newName });
+            if (data.success) { showToast('Renamed', 'success'); closeModal('renameModal'); refreshDir(); }
+            else showToast(data.error, 'error');
+        }
+
+        async function deleteItem(path, name) {
+            if (!confirm('Delete ' + name + '? This cannot be undone.')) return;
+            const data = await API.post('/files/delete', { path });
+            if (data.success) { showToast('Deleted', 'success'); refreshDir(); }
+            else showToast(data.error, 'error');
+        }
+
+        function downloadItem(path) {
+            window.open('/api/files/download?path=' + encodeURIComponent(path), '_blank');
+        }
+
+        function showUploadModal() { document.getElementById('uploadModal').classList.add('active'); }
+
+        async function uploadFile() {
+            const input = document.getElementById('uploadFile');
+            if (!input.files.length) return;
+
+            const formData = new FormData();
+            formData.append('file', input.files[0]);
+            formData.append('path', currentPath);
+
+            const resp = await fetch('/api/files/upload', { method: 'POST', body: formData, credentials: 'same-origin' });
+            const data = await resp.json();
+            if (data.success) { showToast('Uploaded: ' + data.data.filename, 'success'); closeModal('uploadModal'); refreshDir(); }
+            else showToast(data.error, 'error');
+        }
+
+        async function searchFiles() {
+            const query = document.getElementById('searchInput').value;
+            if (!query) return;
+            const data = await API.get('/files/search?path=' + encodeURIComponent(currentPath) + '&query=' + encodeURIComponent(query));
+            if (!data.success) { showToast(data.error, 'error'); return; }
+
+            const body = document.getElementById('fileList');
+            if (!data.data || data.data.length === 0) {
+                body.innerHTML = '<tr><td colspan="5"><div class="empty-state"><p>No results for "' + query + '"</p></div></td></tr>';
+                return;
+            }
+            body.innerHTML = data.data.map(f => `<tr>
+                <td><span class="name" onclick="${f.is_dir ? `loadDir('${f.path}')` : `editFile('${f.path}')`}"><span class="fm-icon">${f.is_dir ? '📁' : '📄'}</span>${f.name}</span></td>
+                <td style="color:var(--text-muted);">${f.is_dir ? '—' : formatBytes(f.size)}</td>
+                <td></td>
+                <td style="color:var(--text-muted); font-size:0.8rem;">${f.mod_time || ''}</td>
+                <td><span style="font-size:0.75rem; color:var(--text-muted);">${f.path}</span></td>
+            </tr>`).join('');
+        }
+
+        document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') searchFiles(); });
+
+        // Init
+        loadDir('/');
+    </script>
 </body>
 
 </html>

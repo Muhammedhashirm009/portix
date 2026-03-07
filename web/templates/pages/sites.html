@@ -15,28 +15,171 @@
         <main class="main-content">
             <div class="page-header">
                 <h1>Websites</h1>
-                <p>Manage PHP sites with auto-tunneling</p>
+                <p>Manage PHP sites with Nginx and auto-tunneling</p>
             </div>
+
             <div class="page-body">
                 <div class="card">
                     <div class="card-header">
-                        <h3>Sites</h3>
-                        <button class="btn btn-primary btn-sm" disabled>+ Create Site (Phase 2)</button>
+                        <h3>🌐 Sites</h3>
+                        <button class="btn btn-primary btn-sm" onclick="showCreateSiteModal()">+ Create Site</button>
                     </div>
                     <div class="card-body">
-                        <div class="empty-state">
-                            <div class="icon">🌐</div>
-                            <p>Site management will be available in Phase 2</p>
-                            <p style="font-size:0.8rem; color:var(--text-muted);">Create PHP sites with Nginx vhosts,
-                                auto-port assignment, and Cloudflare tunnel routing.</p>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Domain</th>
+                                        <th>PHP</th>
+                                        <th>Port</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sitesBody">
+                                    <tr>
+                                        <td colspan="6">
+                                            <div class="empty-state">
+                                                <div class="spinner" style="margin:0 auto;"></div>
+                                                <p style="margin-top:8px;">Loading...</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
+                    </div>
+                </div>
+
+                <!-- PHP Versions -->
+                <div class="card" style="margin-top:16px;">
+                    <div class="card-header">
+                        <h3>🐘 PHP Versions</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="phpVersions" style="display:flex; gap:12px; flex-wrap:wrap;">Loading...</div>
                     </div>
                 </div>
             </div>
         </main>
     </div>
+
+    <!-- Create Site Modal -->
+    <div class="modal-overlay" id="createSiteModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Create New Site</h3>
+                <button class="modal-close" onclick="closeModal('createSiteModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Site Name</label>
+                    <input type="text" class="form-control" id="siteName" placeholder="my-website">
+                </div>
+                <div class="form-group">
+                    <label>Domain</label>
+                    <input type="text" class="form-control" id="siteDomain" placeholder="blog.yourdomain.com">
+                    <small style="color:var(--text-muted);">This domain will be auto-tunneled via Cloudflare</small>
+                </div>
+                <div class="form-group">
+                    <label>PHP Version</label>
+                    <select class="form-control" id="sitePhpVersion">
+                        <option value="8.2">PHP 8.2</option>
+                        <option value="8.1">PHP 8.1</option>
+                        <option value="8.0">PHP 8.0</option>
+                        <option value="7.4">PHP 7.4</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closeModal('createSiteModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="createSite()">Create Site</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
     <script src="/static/js/api.js"></script>
     <script src="/static/js/app.js"></script>
+    <script>
+        async function loadSites() {
+            const data = await API.get('/sites');
+            const body = document.getElementById('sitesBody');
+
+            if (!data.success || !data.data || data.data.length === 0) {
+                body.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="icon">🌐</div><p>No sites yet. Click "Create Site" to get started!</p></div></td></tr>';
+                return;
+            }
+
+            body.innerHTML = data.data.map(s => `<tr>
+                <td><strong>${s.name}</strong></td>
+                <td><a href="https://${s.domain}" target="_blank" style="color:var(--text-accent);">${s.domain}</a></td>
+                <td><span class="badge badge-info">PHP ${s.php_version}</span></td>
+                <td style="font-family:'JetBrains Mono',monospace; font-size:0.85rem;">${s.port}</td>
+                <td><span class="badge ${s.status === 'active' ? 'badge-success' : 'badge-danger'}">${s.status}</span></td>
+                <td>
+                    <div style="display:flex; gap:4px;">
+                        <button class="btn btn-ghost btn-sm" onclick="window.location='/files?path=${encodeURIComponent(s.document_root)}'">📁 Files</button>
+                        <button class="btn btn-ghost btn-sm" onclick="deleteSite(${s.id}, '${s.name}')">🗑️</button>
+                    </div>
+                </td>
+            </tr>`).join('');
+        }
+
+        async function loadPHPVersions() {
+            const data = await API.get('/sites/php-versions');
+            const container = document.getElementById('phpVersions');
+            if (!data.success || !data.data) {
+                container.innerHTML = '<span style="color:var(--text-muted);">Unable to detect PHP versions</span>';
+                return;
+            }
+            container.innerHTML = data.data.map(v => `
+                <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:8px; padding:12px 16px; min-width:120px;">
+                    <div style="font-weight:600;">PHP ${v.version}</div>
+                    <div style="font-size:0.8rem; margin-top:4px;">
+                        <span class="badge ${v.active ? 'badge-success' : 'badge-danger'}" style="font-size:0.7rem;">${v.active ? 'Active' : 'Inactive'}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function showCreateSiteModal() {
+            document.getElementById('createSiteModal').classList.add('active');
+        }
+
+        async function createSite() {
+            const name = document.getElementById('siteName').value;
+            const domain = document.getElementById('siteDomain').value;
+            const phpVersion = document.getElementById('sitePhpVersion').value;
+
+            if (!name || !domain) {
+                showToast('Name and domain are required', 'error');
+                return;
+            }
+
+            const data = await API.post('/sites', { name, domain, php_version: phpVersion });
+            if (data.success) {
+                showToast('Site created: ' + domain, 'success');
+                closeModal('createSiteModal');
+                loadSites();
+            } else {
+                showToast(data.error || 'Failed to create site', 'error');
+            }
+        }
+
+        async function deleteSite(id, name) {
+            if (!confirm('Delete site "' + name + '"? The document root will NOT be deleted.')) return;
+            const data = await API.delete('/sites/' + id);
+            if (data.success) { showToast('Site deleted', 'success'); loadSites(); }
+            else showToast(data.error, 'error');
+        }
+
+        // Init
+        loadSites();
+        loadPHPVersions();
+    </script>
 </body>
 
 </html>

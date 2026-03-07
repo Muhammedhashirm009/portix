@@ -53,6 +53,11 @@ func NewManager(cf *CloudflareClient, pa *PortAllocator, configDir, tunnelID, tu
 	}
 }
 
+// AllocatePort allocates a port for a hosted app
+func (m *Manager) AllocatePort(appType string, appID int) (int, error) {
+	return m.portAllocator.Allocate(appType, appID)
+}
+
 // AddIngressRule adds a domain → localhost:port mapping to Tunnel #2
 func (m *Manager) AddIngressRule(domain string, port int, appType string, appID int) error {
 	m.mu.Lock()
