@@ -1,0 +1,22 @@
+# Binaries
+build/portix
+build/portix-cli
+build/tunnelpanel
+build/tunnelpanel-cli
+
+# Data
+*.db
+*.db-shm
+*.db-wal
+
+# Credentials (never commit)
+/etc/portix/
+tunnel-*-creds.json
+*.secret
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
