@@ -259,7 +259,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/cloudflared tunnel --config ${DATA_DIR}/tunnel-panel.yml run
+ExecStart=/usr/local/bin/cloudflared tunnel --config ${DATA_DIR}/portix-panel.yml run
 Restart=always
 RestartSec=10
 StartLimitIntervalSec=0
@@ -279,7 +279,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/cloudflared tunnel --config ${DATA_DIR}/tunnel-apps.yml run
+ExecStart=/usr/local/bin/cloudflared tunnel --config ${DATA_DIR}/portix-apps.yml run
 Restart=always
 RestartSec=10
 StartLimitIntervalSec=0

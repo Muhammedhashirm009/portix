@@ -274,7 +274,7 @@ func (m *Manager) regenerateConfig() error {
 		return fmt.Errorf("apps tunnel ID is empty — cannot generate config")
 	}
 
-	credsFile := filepath.Join(m.configDir, "tunnel-apps-creds.json")
+	credsFile := filepath.Join(m.configDir, "portix-apps-creds.json")
 	config := TunnelConfig{
 		Tunnel:          m.tunnelID,
 		CredentialsFile: credsFile,
@@ -311,7 +311,7 @@ func (m *Manager) regenerateConfig() error {
 	yamlStr := strings.ReplaceAll(string(data), "\r\n", "\n")
 	yamlStr = strings.ReplaceAll(yamlStr, "\r", "\n")
 
-	configPath := filepath.Join(m.configDir, "tunnel-apps.yml")
+	configPath := filepath.Join(m.configDir, "portix-apps.yml")
 	if err := os.WriteFile(configPath, []byte(yamlStr), 0600); err != nil {
 		return fmt.Errorf("failed to write tunnel config: %w", err)
 	}
@@ -481,14 +481,14 @@ func (m *Manager) SetupTunnels(panelDomain string) (*SetupResult, error) {
 
 	// 4. Write credential files (only for newly created tunnels — secret is empty for reused ones)
 	if panelSecret != "" {
-		if err := m.writeCredentials(panelTunnel.ID, panelSecret, "portix-creds.json"); err != nil {
+		if err := m.writeCredentials(panelTunnel.ID, panelSecret, "portix-panel-creds.json"); err != nil {
 			return nil, fmt.Errorf("failed to write panel tunnel credentials: %w", err)
 		}
 	} else {
 		log.Println("[tunnel] Reusing existing panel tunnel — skipping credential overwrite")
 	}
 	if appsSecret != "" {
-		if err := m.writeCredentials(appsTunnel.ID, appsSecret, "tunnel-apps-creds.json"); err != nil {
+		if err := m.writeCredentials(appsTunnel.ID, appsSecret, "portix-apps-creds.json"); err != nil {
 			return nil, fmt.Errorf("failed to write apps tunnel credentials: %w", err)
 		}
 	} else {
@@ -499,14 +499,14 @@ func (m *Manager) SetupTunnels(panelDomain string) (*SetupResult, error) {
 	// 5. Write cloudflared config for panel tunnel
 	panelConfig := TunnelConfig{
 		Tunnel:          panelTunnel.ID,
-		CredentialsFile: filepath.Join(m.configDir, "portix-creds.json"),
+		CredentialsFile: filepath.Join(m.configDir, "portix-panel-creds.json"),
 		Ingress: []IngressRule{
 			{Hostname: panelDomain, Service: "http://localhost:8443"},
 			{Service: "http_status:404"},
 		},
 	}
 	panelConfigData, _ := yaml.Marshal(panelConfig)
-	panelConfigPath := filepath.Join(m.configDir, "portix.yml")
+	panelConfigPath := filepath.Join(m.configDir, "portix-panel.yml")
 	if err := os.WriteFile(panelConfigPath, panelConfigData, 0600); err != nil {
 		return nil, fmt.Errorf("failed to write panel tunnel config: %w", err)
 	}
@@ -514,13 +514,13 @@ func (m *Manager) SetupTunnels(panelDomain string) (*SetupResult, error) {
 	// 6. Write cloudflared config for apps tunnel — rebuild from DB ingress rules
 	m.tunnelID = appsTunnel.ID
 	m.tunnelSecret = appsSecret
-	appsConfigPath := filepath.Join(m.configDir, "tunnel-apps.yml")
+	appsConfigPath := filepath.Join(m.configDir, "portix-apps.yml")
 	if err := m.regenerateConfig(); err != nil {
 		// Fallback: write minimal config with catch-all if regenerate fails
 		log.Printf("[tunnel] regenerateConfig failed, writing minimal: %v", err)
 		appsConfig := TunnelConfig{
 			Tunnel:          appsTunnel.ID,
-			CredentialsFile: filepath.Join(m.configDir, "tunnel-apps-creds.json"),
+			CredentialsFile: filepath.Join(m.configDir, "portix-apps-creds.json"),
 			Ingress:         []IngressRule{{Service: "http_status:404"}},
 		}
 		appsConfigData, _ := yaml.Marshal(appsConfig)
