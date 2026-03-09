@@ -153,10 +153,10 @@ hdr "Step 4/7 — Installing Portix Binary"
 # Try to download pre-built binary from GitHub releases
 BINARY_URL=""
 if [[ "$PORTIX_VERSION" == "latest" ]]; then
-  info "Checking for pre-built release on GitHub..."
+  info "Fetching latest release from GitHub..."
   RELEASE_JSON=$(curl -sSL "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" 2>/dev/null || echo "{}")
-  # Use || true — grep exits 1 on no match which kills script under set -euo pipefail
-  BINARY_URL=$(echo "$RELEASE_JSON" | grep -o '"browser_download_url":"[^"]*portix-linux-'"${GOARCH}"'[^"]*"' | grep -o 'https://[^"]*' || true)
+  # Use || true — grep exits 1 (no match) kills the script under set -euo pipefail
+  BINARY_URL=$(echo "$RELEASE_JSON" | grep -o '"browser_download_url":[^"]*"[^"]*"' | grep -i "portix.*${GOARCH}\|${GOARCH}.*portix\|portix-linux" | grep -o 'https://[^"]*' | head -1 || true)
 fi
 
 if [[ -n "$BINARY_URL" ]]; then
@@ -165,7 +165,7 @@ if [[ -n "$BINARY_URL" ]]; then
   chmod +x "${INSTALL_DIR}/${BINARY}"
   ok "Portix binary installed from release"
 else
-  warn "No pre-built release — building from source (takes ~60s)..."
+  warn "No pre-built release found — building from source..."
 
   # Check if Go is already installed with a sufficient version
   NEED_GO=true
@@ -191,14 +191,12 @@ else
     ok "Go $(go version | awk '{print $3}') installed"
   fi
 
-  # Clone — use fixed path (mktemp creates dir that git clone can't clone INTO)
+  # Clone — use PID-based path (mktemp dir exists; git clone needs absent or empty path)
   BUILD_DIR="/tmp/portix-build-$$"
   rm -rf "$BUILD_DIR"
   info "Cloning Portix source..."
-  git clone --depth 1 "https://github.com/${GITHUB_REPO}.git" "$BUILD_DIR" 2>&1 | sed 's/^/  /' \
-    || fail "git clone failed — check internet connection"
-
-  info "Compiling Portix binary..."
+  git clone --depth 1 "https://github.com/${GITHUB_REPO}.git" "$BUILD_DIR" 2>&1 | sed 's/^/  /' || fail "git clone failed"
+  info "Compiling Portix binary (~60s)..."
   cd "$BUILD_DIR"
   CGO_ENABLED=1 go build -ldflags "-s -w" -o "${INSTALL_DIR}/${BINARY}" ./cmd/server/ 2>&1 | sed 's/^/  /' \
     || fail "Build failed — see output above"
@@ -214,8 +212,8 @@ hdr "Step 5/7 — Setting Up Configuration"
 mkdir -p "$DATA_DIR" "$LOG_DIR"
 chmod 700 "$DATA_DIR"
 
-# Generate JWT secret
-JWT_SECRET=$(cat /dev/urandom | tr -dc 'a-f0-9' | fold -w 64 | head -1)
+# Generate JWT secret — avoid SIGPIPE from head closing the pipe under set -o pipefail
+JWT_SECRET=$(openssl rand -hex 32 2>/dev/null || dd if=/dev/urandom bs=32 count=1 2>/dev/null | xxd -p | tr -d '\n' || LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom | dd bs=64 count=1 2>/dev/null)
 
 # Write config.json if it doesn't exist
 if [[ ! -f "${DATA_DIR}/config.json" ]]; then
